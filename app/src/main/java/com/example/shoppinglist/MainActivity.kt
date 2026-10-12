@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.shoppinglist.ui.theme.ShoppingListTheme
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 
 private val Cream = Color(0xFFF7F6F0)
 private val DarkGreen = Color(0xFF42664D)
@@ -98,10 +100,71 @@ fun ShoppingHomeScreen() {
     var nextId by remember { mutableIntStateOf(4) }
     var openedList by remember { mutableStateOf<String?>(null) }
 
+    val productsByList =
+        remember {
+            mutableStateMapOf<Int, SnapshotStateList<ShoppingProduct>>().apply {
+                put(
+                    1,
+                    mutableStateListOf(
+                        ShoppingProduct(1, "Молоко", "Молочные продукты"),
+                        ShoppingProduct(2, "Сыр", "Молочные продукты"),
+                        ShoppingProduct(3, "Йогурт", "Молочные продукты"),
+                        ShoppingProduct(4, "Яблоки", "Овощи и фрукты"),
+                        ShoppingProduct(5, "Бананы", "Овощи и фрукты"),
+                        ShoppingProduct(6, "Помидоры", "Овощи и фрукты"),
+                        ShoppingProduct(7, "Куриное филе", "Мясо и рыба"),
+                        ShoppingProduct(8, "Хлеб", "Бакалея")
+                    )
+                )
+
+                put(
+                    2,
+                    mutableStateListOf(
+                        ShoppingProduct(1, "Губка для посуды", "Уборка"),
+                        ShoppingProduct(2, "Средство для пола", "Уборка"),
+                        ShoppingProduct(3, "Мыло", "Гигиена")
+                    )
+                )
+
+                put(
+                    3,
+                    mutableStateListOf(
+                        ShoppingProduct(1, "Торт", "Сладости"),
+                        ShoppingProduct(2, "Сок", "Напитки"),
+                        ShoppingProduct(3, "Фрукты", "Овощи и фрукты")
+                    )
+                )
+            }
+        }
+
     if (openedList != null) {
+        val activeList = shoppingLists.first {
+            it.title == openedList
+        }
+
         ShoppingListScreen(
-            listName = openedList!!,
-            onBack = { openedList = null }
+            listName = activeList.title,
+            products = productsByList[activeList.id]!!,
+            onBack = { openedList = null },
+            onItemsChanged = { total, bought ->
+                val index = shoppingLists.indexOfFirst {
+                    it.id == activeList.id
+                }
+
+                if (index >= 0) {
+                    val current = shoppingLists[index]
+
+                    if (
+                        current.totalItems != total ||
+                        current.boughtItems != bought
+                    ) {
+                        shoppingLists[index] = current.copy(
+                            totalItems = total,
+                            boughtItems = bought
+                        )
+                    }
+                }
+            }
         )
     } else {
         Scaffold(
@@ -207,7 +270,9 @@ fun ShoppingHomeScreen() {
 
                         item {
                             Button(
-                                onClick = {
+                                onClick = {val id = nextId++
+                                    productsByList[id] = mutableStateListOf()
+
                                     shoppingLists.add(
                                         ShoppingListItem(
                                             id = nextId++,

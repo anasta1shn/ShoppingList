@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +20,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,11 +29,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,7 +48,7 @@ private val ShoppingCream = Color(0xFFF7F6F0)
 private val ShoppingText = Color(0xFF28352B)
 private val ShoppingMuted = Color(0xFF899087)
 
-private data class GroceryItem(
+data class ShoppingProduct(
     val id: Int,
     val name: String,
     val category: String,
@@ -55,25 +58,18 @@ private data class GroceryItem(
 @Composable
 fun ShoppingListScreen(
     listName: String,
-    onBack: () -> Unit
+    products: SnapshotStateList<ShoppingProduct>,
+    onBack: () -> Unit,
+    onItemsChanged: (Int, Int) -> Unit
 ) {
-    val groceries = remember {
-        mutableStateListOf(
-            GroceryItem(1, "Молоко", "Молочные продукты"),
-            GroceryItem(2, "Сыр", "Молочные продукты"),
-            GroceryItem(3, "Йогурт", "Молочные продукты"),
-            GroceryItem(4, "Яблоки", "Овощи и фрукты"),
-            GroceryItem(5, "Бананы", "Овощи и фрукты"),
-            GroceryItem(6, "Помидоры", "Овощи и фрукты"),
-            GroceryItem(7, "Куриное филе", "Мясо и рыба"),
-            GroceryItem(8, "Хлеб", "Бакалея")
-        )
-    }
-
     var newItemName by remember { mutableStateOf("") }
 
-    val boughtCount = groceries.count { it.bought }
-    val categories = groceries.map { it.category }.distinct()
+    val boughtCount = products.count { it.bought }
+    val categories = products.map { it.category }.distinct()
+
+    LaunchedEffect(products.size, boughtCount) {
+        onItemsChanged(products.size, boughtCount)
+    }
 
     Scaffold(
         containerColor = ShoppingCream,
@@ -100,7 +96,7 @@ fun ShoppingListScreen(
                         color = ShoppingText
                     )
                     Text(
-                        text = "$boughtCount из ${groceries.size} куплено",
+                        text = "$boughtCount из ${products.size} куплено",
                         color = ShoppingMuted,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -144,10 +140,11 @@ fun ShoppingListScreen(
                     Button(
                         onClick = {
                             val name = newItemName.trim()
+
                             if (name.isNotEmpty()) {
-                                groceries.add(
-                                    GroceryItem(
-                                        id = (groceries.maxOfOrNull { it.id } ?: 0) + 1,
+                                products.add(
+                                    ShoppingProduct(
+                                        id = (products.maxOfOrNull { it.id } ?: 0) + 1,
                                         name = name,
                                         category = "Другое"
                                     )
@@ -177,6 +174,10 @@ fun ShoppingListScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(categories) { category ->
+                    val categoryItems = products.filter {
+                        it.category == category
+                    }
+
                     Column {
                         Text(
                             text = category,
@@ -197,24 +198,20 @@ fun ShoppingListScreen(
                             )
                         ) {
                             Column {
-                                val categoryItems = groceries.filter {
-                                    it.category == category
-                                }
-
-                                categoryItems.forEachIndexed { index, item ->
+                                categoryItems.forEachIndexed { index, product ->
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                val itemIndex =
-                                                    groceries.indexOfFirst {
-                                                        it.id == item.id
+                                                val productIndex =
+                                                    products.indexOfFirst {
+                                                        it.id == product.id
                                                     }
 
-                                                if (itemIndex >= 0) {
-                                                    groceries[itemIndex] =
-                                                        item.copy(
-                                                            bought = !item.bought
+                                                if (productIndex >= 0) {
+                                                    products[productIndex] =
+                                                        product.copy(
+                                                            bought = !product.bought
                                                         )
                                                 }
                                             }
@@ -226,16 +223,16 @@ fun ShoppingListScreen(
                                             Alignment.CenterVertically
                                     ) {
                                         Checkbox(
-                                            checked = item.bought,
+                                            checked = product.bought,
                                             onCheckedChange = { checked ->
-                                                val itemIndex =
-                                                    groceries.indexOfFirst {
-                                                        it.id == item.id
+                                                val productIndex =
+                                                    products.indexOfFirst {
+                                                        it.id == product.id
                                                     }
 
-                                                if (itemIndex >= 0) {
-                                                    groceries[itemIndex] =
-                                                        item.copy(
+                                                if (productIndex >= 0) {
+                                                    products[productIndex] =
+                                                        product.copy(
                                                             bought = checked
                                                         )
                                                 }
@@ -243,15 +240,15 @@ fun ShoppingListScreen(
                                         )
 
                                         Text(
-                                            text = item.name,
+                                            text = product.name,
                                             modifier = Modifier.weight(1f),
-                                            color = if (item.bought) {
+                                            color = if (product.bought) {
                                                 ShoppingMuted
                                             } else {
                                                 ShoppingText
                                             },
                                             textDecoration =
-                                                if (item.bought) {
+                                                if (product.bought) {
                                                     TextDecoration.LineThrough
                                                 } else {
                                                     TextDecoration.None
@@ -260,7 +257,7 @@ fun ShoppingListScreen(
                                     }
 
                                     if (index < categoryItems.lastIndex) {
-                                        androidx.compose.material3.HorizontalDivider(
+                                        HorizontalDivider(
                                             modifier = Modifier.padding(
                                                 horizontal = 16.dp
                                             ),
@@ -275,9 +272,10 @@ fun ShoppingListScreen(
 
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
+
                     TextButton(
                         onClick = {
-                            groceries.removeAll { it.bought }
+                            products.removeAll { it.bought }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -286,6 +284,7 @@ fun ShoppingListScreen(
                             color = ShoppingGreen
                         )
                     }
+
                     Spacer(modifier = Modifier.height(20.dp))
                 }
             }
