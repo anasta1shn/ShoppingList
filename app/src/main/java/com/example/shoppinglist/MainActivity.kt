@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.shoppinglist.ui.theme.ShoppingListTheme
+import androidx.compose.runtime.mutableStateOf
 
 private val Cream = Color(0xFFF7F6F0)
 private val DarkGreen = Color(0xFF42664D)
@@ -95,143 +96,154 @@ fun ShoppingHomeScreen() {
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var nextId by remember { mutableIntStateOf(4) }
+    var openedList by remember { mutableStateOf<String?>(null) }
 
-    Scaffold(
-        containerColor = Cream,
-        bottomBar = {
-            NavigationBarSimple(
-                selectedTab = selectedTab,
-                onTabSelected = { selectedTab = it }
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Cream)
-                .padding(innerPadding)
-                .padding(horizontal = 22.dp)
-        ) {
-            Spacer(modifier = Modifier.height(22.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+    if (openedList != null) {
+        ShoppingListScreen(
+            listName = openedList!!,
+            onBack = { openedList = null }
+        )
+    } else {
+        Scaffold(
+            containerColor = Cream,
+            bottomBar = {
+                NavigationBarSimple(
+                    selectedTab = selectedTab,
+                    onTabSelected = { selectedTab = it }
+                )
+            }
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Cream)
+                    .padding(innerPadding)
+                    .padding(horizontal = 22.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Spacer(modifier = Modifier.height(22.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Smart Shopping",
+                            fontSize = 25.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextDark
+                        )
+                        Spacer(modifier = Modifier.height(5.dp))
+                        Text(
+                            text = "Покупки без лишних забот",
+                            fontSize = 13.sp,
+                            color = TextMuted
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(SoftGreen, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "♡",
+                            color = DarkGreen,
+                            fontSize = 26.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(26.dp))
+
+                SummaryCard(shoppingLists)
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = "Smart Shopping",
-                        fontSize = 25.sp,
+                        text = when (selectedTab) {
+                            0 -> "Мои списки"
+                            1 -> "История"
+                            else -> "Профиль"
+                        },
+                        fontSize = 21.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextDark
+                        color = TextDark,
+                        modifier = Modifier.weight(1f)
                     )
-                    Spacer(modifier = Modifier.height(5.dp))
+
                     Text(
-                        text = "Покупки без лишних забот",
-                        fontSize = 13.sp,
+                        text = if (selectedTab == 0) {
+                            "${shoppingLists.size} списка"
+                        } else {
+                            "Smart Shopping"
+                        },
+                        fontSize = 12.sp,
                         color = TextMuted
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .background(SoftGreen, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "♡",
-                        color = DarkGreen,
-                        fontSize = 26.sp
-                    )
-                }
-            }
+                Spacer(modifier = Modifier.height(14.dp))
 
-            Spacer(modifier = Modifier.height(26.dp))
-
-            SummaryCard(shoppingLists)
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = when (selectedTab) {
-                        0 -> "Мои списки"
-                        1 -> "История"
-                        else -> "Профиль"
-                    },
-                    fontSize = 21.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextDark,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Text(
-                    text = if (selectedTab == 0) {
-                        "${shoppingLists.size} списка"
-                    } else {
-                        "Smart Shopping"
-                    },
-                    fontSize = 12.sp,
-                    color = TextMuted
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            if (selectedTab == 0) {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(
-                        items = shoppingLists,
-                        key = { it.id }
-                    ) { list ->
-                        ShoppingListCard(list = list)
-                    }
-
-                    item {
-                        Button(
-                            onClick = {
-                                shoppingLists.add(
-                                    ShoppingListItem(
-                                        id = nextId++,
-                                        title = "Новый список",
-                                        subtitle = "Мой список покупок",
-                                        icon = "+",
-                                        color = SoftGreen,
-                                        totalItems = 0,
-                                        boughtItems = 0
-                                    )
-                                )
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(54.dp),
-                            shape = RoundedCornerShape(18.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = DarkGreen
-                            )
-                        ) {
-                            Text(
-                                text = "+   Создать список",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium
+                if (selectedTab == 0) {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(
+                            items = shoppingLists,
+                            key = { it.id }
+                        ) { list ->
+                            ShoppingListCard(
+                                list = list,
+                                onClick = { openedList = list.title }
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(18.dp))
+                        item {
+                            Button(
+                                onClick = {
+                                    shoppingLists.add(
+                                        ShoppingListItem(
+                                            id = nextId++,
+                                            title = "Новый список",
+                                            subtitle = "Мой список покупок",
+                                            icon = "+",
+                                            color = SoftGreen,
+                                            totalItems = 0,
+                                            boughtItems = 0
+                                        )
+                                    )
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(54.dp),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = DarkGreen
+                                )
+                            ) {
+                                Text(
+                                    text = "+   Создать список",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(18.dp))
+                        }
                     }
+                } else {
+                    PlaceholderTab(
+                        tab = selectedTab,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
-            } else {
-                PlaceholderTab(
-                    tab = selectedTab,
-                    modifier = Modifier.weight(1f)
-                )
             }
         }
     }
@@ -326,7 +338,10 @@ private fun SummaryCard(lists: List<ShoppingListItem>) {
 }
 
 @Composable
-private fun ShoppingListCard(list: ShoppingListItem) {
+private fun ShoppingListCard(
+    list: ShoppingListItem,
+    onClick: () -> Unit
+)  {
     val progress = if (list.totalItems == 0) {
         0f
     } else {
@@ -336,9 +351,7 @@ private fun ShoppingListCard(list: ShoppingListItem) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable {
-                // Переход к содержимому списка добавим позже.
-            },
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
             containerColor = CardWhite
