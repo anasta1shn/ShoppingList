@@ -4,7 +4,6 @@ package com.example.shoppinglist
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,22 +16,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,10 +44,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.shoppinglist.data.ShoppingRepository
+import com.example.shoppinglist.data.local.ShoppingDatabase
+import com.example.shoppinglist.data.local.ShoppingListEntity
+import com.example.shoppinglist.data.local.ShoppingProductEntity
 import com.example.shoppinglist.ui.theme.ShoppingListTheme
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.snapshots.SnapshotStateList
+import com.example.shoppinglist.ui.viewmodel.ShoppingViewModel
+import com.example.shoppinglist.ui.viewmodel.ShoppingViewModelFactory
+import kotlinx.coroutines.launch
 
 private val Cream = Color(0xFFF7F6F0)
 private val DarkGreen = Color(0xFF42664D)
@@ -53,413 +61,448 @@ private val TextDark = Color(0xFF28352B)
 private val TextMuted = Color(0xFF899087)
 private val CardWhite = Color(0xFFFFFEFA)
 private val SoftPeach = Color(0xFFF5E4D9)
-
-private data class ShoppingListItem(
-    val id: Int,
-    val title: String,
-    val subtitle: String,
-    val icon: String,
-    val color: Color,
-    val totalItems: Int,
-    val boughtItems: Int
-)
+private val SoftLavender = Color(0xFFEAE6F2)
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+
+        val database = ShoppingDatabase.getDatabase(applicationContext)
+        val repository = ShoppingRepository(
+            database.shoppingListDao(),
+            database.shoppingProductDao()
+        )
 
         setContent {
             ShoppingListTheme {
-                ShoppingHomeScreen()
+                val shoppingViewModel: ShoppingViewModel = viewModel(
+                    factory = ShoppingViewModelFactory(repository)
+                )
+
+                ShoppingHomeScreen(viewModel = shoppingViewModel)
             }
         }
     }
 }
 
 @Composable
-fun ShoppingHomeScreen() {
-    val shoppingLists = remember {
-        mutableStateListOf(
-            ShoppingListItem(
-                1, "На неделю", "Основные продукты",
-                "▤", SoftGreen, 12, 5
-            ),
-            ShoppingListItem(
-                2, "Для дома", "Всё для уюта",
-                "⌂", SoftPeach, 6, 2
-            ),
-            ShoppingListItem(
-                3, "Для праздника", "Что-то особенное",
-                "✳", Color(0xFFEAE6F2), 8, 0
-            )
-        )
+private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
+    val lists by viewModel.shoppingLists.collectAsState()
+    var openedListId by remember { mutableStateOf<Int?>(null) }
+    var selectedTab by remember { mutableStateOf(0) }
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var newListName by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        viewModel.createInitialDataIfEmpty()
     }
 
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var nextId by remember { mutableIntStateOf(4) }
-    var openedList by remember { mutableStateOf<String?>(null) }
+    val productCounts by produceState(
+        initialValue = emptyMap<Int, Pair<Int, Int>>(),
+        key1 = lists
+    ) {
+        value = emptyMap()
 
-    val productsByList =
-        remember {
-            mutableStateMapOf<Int, SnapshotStateList<ShoppingProduct>>().apply {
-                put(
-                    1,
-                    mutableStateListOf(
-                        ShoppingProduct(1, "Молоко", "Молочные продукты"),
-                        ShoppingProduct(2, "Сыр", "Молочные продукты"),
-                        ShoppingProduct(3, "Йогурт", "Молочные продукты"),
-                        ShoppingProduct(4, "Яблоки", "Овощи и фрукты"),
-                        ShoppingProduct(5, "Бананы", "Овощи и фрукты"),
-                        ShoppingProduct(6, "Помидоры", "Овощи и фрукты"),
-                        ShoppingProduct(7, "Куриное филе", "Мясо и рыба"),
-                        ShoppingProduct(8, "Хлеб", "Бакалея")
-                    )
-                )
-
-                put(
-                    2,
-                    mutableStateListOf(
-                        ShoppingProduct(1, "Губка для посуды", "Уборка"),
-                        ShoppingProduct(2, "Средство для пола", "Уборка"),
-                        ShoppingProduct(3, "Мыло", "Гигиена")
-                    )
-                )
-
-                put(
-                    3,
-                    mutableStateListOf(
-                        ShoppingProduct(1, "Торт", "Сладости"),
-                        ShoppingProduct(2, "Сок", "Напитки"),
-                        ShoppingProduct(3, "Фрукты", "Овощи и фрукты")
-                    )
-                )
-            }
-        }
-
-    if (openedList != null) {
-        val activeList = shoppingLists.first {
-            it.title == openedList
-        }
-
-        ShoppingListScreen(
-            listName = activeList.title,
-            products = productsByList[activeList.id]!!,
-            onBack = { openedList = null },
-            onItemsChanged = { total, bought ->
-                val index = shoppingLists.indexOfFirst {
-                    it.id == activeList.id
-                }
-
-                if (index >= 0) {
-                    val current = shoppingLists[index]
-
-                    if (
-                        current.totalItems != total ||
-                        current.boughtItems != bought
-                    ) {
-                        shoppingLists[index] = current.copy(
-                            totalItems = total,
-                            boughtItems = bought
-                        )
-                    }
+        lists.forEach { list ->
+            launch {
+                viewModel.getProductsForList(list.id).collect { products ->
+                    value = value + (
+                            list.id to Pair(
+                                products.size,
+                                products.count { it.bought }
+                            )
+                            )
                 }
             }
+        }
+    }
+
+    val activeList = lists.firstOrNull { it.id == openedListId }
+
+    if (activeList != null) {
+        ShoppingListRoute(
+            list = activeList,
+            viewModel = viewModel,
+            onBack = { openedListId = null }
         )
-    } else {
-        Scaffold(
-            containerColor = Cream,
-            bottomBar = {
-                NavigationBarSimple(
-                    selectedTab = selectedTab,
-                    onTabSelected = { selectedTab = it }
-                )
-            }
-        ) { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Cream)
-                    .padding(innerPadding)
-                    .padding(horizontal = 22.dp)
-            ) {
-                Spacer(modifier = Modifier.height(22.dp))
+        return
+    }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Cream)
+    ) {
+        when (selectedTab) {
+            0 -> {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Text(
+                        text = "Мои покупки",
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextDark
+                    )
+
+                    Text(
+                        text = "Всё необходимое — в одном месте",
+                        fontSize = 14.sp,
+                        color = TextMuted
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    val totalItems = productCounts.values.sumOf { it.first }
+                    val boughtItems = productCounts.values.sumOf { it.second }
+
+                    SummaryCard(
+                        listCount = lists.size,
+                        totalItems = totalItems,
+                        boughtItems = boughtItems
+                    )
+
+                    Spacer(modifier = Modifier.height(22.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = "Smart Shopping",
-                            fontSize = 25.sp,
+                            text = "Мои списки",
+                            modifier = Modifier.weight(1f),
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextDark
                         )
-                        Spacer(modifier = Modifier.height(5.dp))
+
                         Text(
-                            text = "Покупки без лишних забот",
+                            text = "${lists.size} списка",
                             fontSize = 13.sp,
                             color = TextMuted
                         )
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(SoftGreen, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "♡",
-                            color = DarkGreen,
-                            fontSize = 26.sp
-                        )
-                    }
-                }
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                Spacer(modifier = Modifier.height(26.dp))
+                    if (lists.isEmpty()) {
+                        EmptyListsCard()
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(
+                                items = lists,
+                                key = { it.id }
+                            ) { list ->
+                                val counts = productCounts[list.id] ?: (0 to 0)
 
-                SummaryCard(shoppingLists)
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = when (selectedTab) {
-                            0 -> "Мои списки"
-                            1 -> "История"
-                            else -> "Профиль"
-                        },
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextDark,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Text(
-                        text = if (selectedTab == 0) {
-                            "${shoppingLists.size} списка"
-                        } else {
-                            "Smart Shopping"
-                        },
-                        fontSize = 12.sp,
-                        color = TextMuted
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                if (selectedTab == 0) {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(
-                            items = shoppingLists,
-                            key = { it.id }
-                        ) { list ->
-                            ShoppingListCard(
-                                list = list,
-                                onClick = { openedList = list.title }
-                            )
-                        }
-
-                        item {
-                            Button(
-                                onClick = {val id = nextId++
-                                    productsByList[id] = mutableStateListOf()
-
-                                    shoppingLists.add(
-                                        ShoppingListItem(
-                                            id = nextId++,
-                                            title = "Новый список",
-                                            subtitle = "Мой список покупок",
-                                            icon = "+",
-                                            color = SoftGreen,
-                                            totalItems = 0,
-                                            boughtItems = 0
-                                        )
-                                    )
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(54.dp),
-                                shape = RoundedCornerShape(18.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = DarkGreen
-                                )
-                            ) {
-                                Text(
-                                    text = "+   Создать список",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Medium
+                                ShoppingListCard(
+                                    list = list,
+                                    totalItems = counts.first,
+                                    boughtItems = counts.second,
+                                    onClick = { openedListId = list.id }
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(18.dp))
+                            item {
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
                         }
                     }
-                } else {
-                    PlaceholderTab(
-                        tab = selectedTab,
-                        modifier = Modifier.weight(1f)
-                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            newListName = ""
+                            showCreateDialog = true
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp),
+                        shape = RoundedCornerShape(17.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = DarkGreen
+                        )
+                    ) {
+                        Text(
+                            text = "+  Создать новый список",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
+            }
+
+            1 -> PlaceholderTab(
+                title = "История",
+                description = "Здесь появится история покупок"
+            )
+
+            else -> PlaceholderTab(
+                title = "Профиль",
+                description = "Настройки приложения появятся здесь"
+            )
+        }
+
+        NavigationBar(
+            containerColor = CardWhite
+        ) {
+            NavigationBarItem(
+                selected = selectedTab == 0,
+                onClick = { selectedTab = 0 },
+                icon = { Text("▤", fontSize = 20.sp) },
+                label = { Text("Списки") }
+            )
+
+            NavigationBarItem(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                icon = { Text("◷", fontSize = 20.sp) },
+                label = { Text("История") }
+            )
+
+            NavigationBarItem(
+                selected = selectedTab == 2,
+                onClick = { selectedTab = 2 },
+                icon = { Text("○", fontSize = 20.sp) },
+                label = { Text("Профиль") }
+            )
+        }
+    }
+
+    if (showCreateDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateDialog = false },
+            containerColor = CardWhite,
+            title = {
+                Text(
+                    text = "Новый список",
+                    color = TextDark,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                OutlinedTextField(
+                    value = newListName,
+                    onValueChange = { newListName = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text("Например, Покупки на выходные") },
+                    shape = RoundedCornerShape(14.dp)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val title = newListName.trim()
+                        if (title.isNotEmpty()) {
+                            viewModel.addList(title)
+                            showCreateDialog = false
+                        }
+                    }
+                ) {
+                    Text("Создать", color = DarkGreen)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateDialog = false }) {
+                    Text("Отмена", color = TextMuted)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun ShoppingListRoute(
+    list: ShoppingListEntity,
+    viewModel: ShoppingViewModel,
+    onBack: () -> Unit
+) {
+    val productEntities by viewModel
+        .getProductsForList(list.id)
+        .collectAsState(initial = emptyList())
+
+    val products = productEntities.map { entity ->
+        ShoppingProduct(
+            id = entity.id,
+            name = entity.name,
+            category = entity.category,
+            bought = entity.bought
+        )
+    }
+
+    ShoppingListScreen(
+        listName = list.title,
+        products = products,
+        onBack = onBack,
+        onAddProduct = { name, category ->
+            viewModel.addProduct(list.id, name, category)
+        },
+        onProductBoughtChanged = { productId, bought ->
+            val entity = productEntities.firstOrNull { it.id == productId }
+            if (entity != null) {
+                viewModel.setProductBought(entity, bought)
+            }
+        },
+        onDeleteBoughtProducts = {
+            viewModel.deleteBoughtProducts(list.id)
+        }
+    )
+}
+
+@Composable
+private fun SummaryCard(
+    listCount: Int,
+    totalItems: Int,
+    boughtItems: Int
+) {
+    val progress = if (totalItems == 0) 0f
+    else boughtItems.toFloat() / totalItems.toFloat()
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = SoftGreen,
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "Покупки под контролем",
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextDark
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = when {
+                    totalItems == 0 -> "Добавь товары в свои списки"
+                    boughtItems == totalItems -> "Отлично! Всё куплено"
+                    else -> "Уже куплено $boughtItems из $totalItems товаров"
+                },
+                fontSize = 14.sp,
+                color = TextMuted
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .background(
+                        Color(0xFFD2DCCB),
+                        RoundedCornerShape(50)
+                    )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress)
+                        .height(8.dp)
+                        .background(
+                            DarkGreen,
+                            RoundedCornerShape(50)
+                        )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                SummaryMetric(value = "$listCount", label = "списков")
+                SummaryMetric(value = "$totalItems", label = "товаров")
+                SummaryMetric(value = "${(progress * 100).toInt()}%", label = "выполнено")
             }
         }
     }
 }
 
 @Composable
-private fun SummaryCard(lists: List<ShoppingListItem>) {
-    val total = lists.sumOf { it.totalItems }
-    val bought = lists.sumOf { it.boughtItems }
-    val progress = if (total == 0) 0f else bought.toFloat() / total
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = CardWhite
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 0.dp
+private fun SummaryMetric(value: String, label: String) {
+    Column {
+        Text(
+            text = value,
+            fontSize = 21.sp,
+            fontWeight = FontWeight.Bold,
+            color = DarkGreen
         )
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(SoftGreen, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "✓",
-                        fontSize = 25.sp,
-                        color = DarkGreen,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(13.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Всё под контролем",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextDark
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Твои покупки в одном месте",
-                        fontSize = 12.sp,
-                        color = TextMuted
-                    )
-                }
-
-                Text(
-                    text = "$bought/$total",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = DarkGreen
-                )
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(7.dp)
-                    .background(SoftGreen, CircleShape)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(progress.coerceIn(0f, 1f))
-                        .height(7.dp)
-                        .background(DarkGreen, CircleShape)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(9.dp))
-
-            Text(
-                text = if (total == 0) {
-                    "Пока нет товаров"
-                } else {
-                    "Куплено ${"%.0f".format(progress * 100)}% товаров"
-                },
-                fontSize = 12.sp,
-                color = TextMuted
-            )
-        }
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = TextMuted
+        )
     }
 }
 
 @Composable
 private fun ShoppingListCard(
-    list: ShoppingListItem,
+    list: ShoppingListEntity,
+    totalItems: Int,
+    boughtItems: Int,
     onClick: () -> Unit
-)  {
-    val progress = if (list.totalItems == 0) {
-        0f
-    } else {
-        list.boughtItems.toFloat() / list.totalItems
-    }
+) {
+    val progress = if (totalItems == 0) 0f
+    else boughtItems.toFloat() / totalItems.toFloat()
 
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = CardWhite
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 0.dp
-        )
+        color = CardWhite,
+        shape = RoundedCornerShape(22.dp)
     ) {
         Row(
-            modifier = Modifier.padding(15.dp),
+            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val iconBackground = Color(list.color)
+
             Box(
                 modifier = Modifier
-                    .size(55.dp)
+                    .size(54.dp)
                     .background(
-                        list.color,
+                        iconBackground,
                         RoundedCornerShape(17.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = list.icon,
-                    fontSize = 27.sp,
+                    fontSize = 24.sp,
                     color = DarkGreen
                 )
             }
 
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 14.dp, end = 8.dp)
+            ) {
                 Text(
                     text = list.title,
-                    fontSize = 16.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TextDark
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
-
                 Text(
-                    text = list.subtitle,
-                    fontSize = 12.sp,
+                    text = list.subtitle.ifBlank { "Мой список покупок" },
+                    fontSize = 13.sp,
                     color = TextMuted
                 )
 
@@ -468,31 +511,35 @@ private fun ShoppingListCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(5.dp)
-                        .background(SoftGreen, CircleShape)
+                        .height(6.dp)
+                        .background(
+                            Color(0xFFE9EAE3),
+                            RoundedCornerShape(50)
+                        )
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(progress.coerceIn(0f, 1f))
-                            .height(5.dp)
-                            .background(DarkGreen, CircleShape)
+                            .fillMaxWidth(progress)
+                            .height(6.dp)
+                            .background(
+                                DarkGreen,
+                                RoundedCornerShape(50)
+                            )
                     )
                 }
 
                 Spacer(modifier = Modifier.height(5.dp))
 
                 Text(
-                    text = "${list.boughtItems} из ${list.totalItems} куплено",
-                    fontSize = 11.sp,
+                    text = "$boughtItems из $totalItems куплено",
+                    fontSize = 12.sp,
                     color = TextMuted
                 )
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
-
             Text(
                 text = "›",
-                fontSize = 27.sp,
+                fontSize = 30.sp,
                 color = TextMuted
             )
         }
@@ -500,115 +547,57 @@ private fun ShoppingListCard(
 }
 
 @Composable
-private fun NavigationBarSimple(
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit
-) {
+private fun EmptyListsCard() {
     Surface(
+        modifier = Modifier.fillMaxWidth(),
         color = CardWhite,
-        shadowElevation = 0.dp
+        shape = RoundedCornerShape(20.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            NavigationItem(
-                icon = "▤",
-                label = "Списки",
-                selected = selectedTab == 0,
-                onClick = { onTabSelected(0) }
+            Text("🛍️", fontSize = 34.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "У тебя пока нет списков",
+                color = TextDark,
+                fontWeight = FontWeight.SemiBold
             )
-
-            NavigationItem(
-                icon = "◷",
-                label = "История",
-                selected = selectedTab == 1,
-                onClick = { onTabSelected(1) }
-            )
-
-            NavigationItem(
-                icon = "♙",
-                label = "Профиль",
-                selected = selectedTab == 2,
-                onClick = { onTabSelected(2) }
+            Text(
+                text = "Создай первый список покупок",
+                color = TextMuted,
+                fontSize = 13.sp
             )
         }
     }
 }
 
 @Composable
-private fun NavigationItem(
-    icon: String,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
+private fun PlaceholderTab(
+    title: String,
+    description: String
 ) {
-    val contentColor = if (selected) DarkGreen else TextMuted
-
     Column(
         modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 3.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = icon,
-            fontSize = 22.sp,
-            color = contentColor
-        )
-
-        Spacer(modifier = Modifier.height(3.dp))
-
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = contentColor,
-            fontWeight = if (selected) {
-                FontWeight.SemiBold
-            } else {
-                FontWeight.Normal
-            }
-        )
-    }
-}
-
-@Composable
-private fun PlaceholderTab(
-    tab: Int,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
+            .fillMaxSize()
+            .background(Cream)
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = if (tab == 1) "◷" else "♡",
-            fontSize = 42.sp,
-            color = DarkGreen
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = if (tab == 1) {
-                "История покупок"
-            } else {
-                "Твой профиль"
-            },
-            fontSize = 19.sp,
-            fontWeight = FontWeight.SemiBold,
+            text = title,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold,
             color = TextDark
         )
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         Text(
-            text = "Добавим этот раздел чуть позже",
-            fontSize = 13.sp,
+            text = description,
+            fontSize = 14.sp,
             color = TextMuted
         )
     }
