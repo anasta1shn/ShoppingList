@@ -32,6 +32,21 @@ class ShoppingViewModel(
         }
     }
 
+    fun updateList(
+        list: ShoppingListEntity,
+        title: String,
+        subtitle: String
+    ) {
+        viewModelScope.launch {
+            repository.updateList(
+                list.copy(
+                    title = title.trim(),
+                    subtitle = subtitle.trim()
+                )
+            )
+        }
+    }
+
     fun deleteList(list: ShoppingListEntity) {
         viewModelScope.launch {
             repository.deleteList(list)

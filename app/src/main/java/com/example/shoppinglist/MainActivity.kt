@@ -18,12 +18,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
@@ -48,7 +48,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.shoppinglist.data.ShoppingRepository
 import com.example.shoppinglist.data.local.ShoppingDatabase
 import com.example.shoppinglist.data.local.ShoppingListEntity
-import com.example.shoppinglist.data.local.ShoppingProductEntity
 import com.example.shoppinglist.ui.theme.ShoppingListTheme
 import com.example.shoppinglist.ui.viewmodel.ShoppingViewModel
 import com.example.shoppinglist.ui.viewmodel.ShoppingViewModelFactory
@@ -60,8 +59,6 @@ private val SoftGreen = Color(0xFFE6EBDD)
 private val TextDark = Color(0xFF28352B)
 private val TextMuted = Color(0xFF899087)
 private val CardWhite = Color(0xFFFFFEFA)
-private val SoftPeach = Color(0xFFF5E4D9)
-private val SoftLavender = Color(0xFFEAE6F2)
 
 class MainActivity : ComponentActivity() {
 
@@ -89,10 +86,22 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
     val lists by viewModel.shoppingLists.collectAsState()
+
     var openedListId by remember { mutableStateOf<Int?>(null) }
     var selectedTab by remember { mutableStateOf(0) }
+
     var showCreateDialog by remember { mutableStateOf(false) }
     var newListName by remember { mutableStateOf("") }
+
+    var editingList by remember {
+        mutableStateOf<ShoppingListEntity?>(null)
+    }
+    var editListName by remember { mutableStateOf("") }
+    var editListSubtitle by remember { mutableStateOf("") }
+
+    var deletingList by remember {
+        mutableStateOf<ShoppingListEntity?>(null)
+    }
 
     LaunchedEffect(Unit) {
         viewModel.createInitialDataIfEmpty()
@@ -208,7 +217,17 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                                     list = list,
                                     totalItems = counts.first,
                                     boughtItems = counts.second,
-                                    onClick = { openedListId = list.id }
+                                    onClick = {
+                                        openedListId = list.id
+                                    },
+                                    onEdit = {
+                                        editListName = list.title
+                                        editListSubtitle = list.subtitle
+                                        editingList = list
+                                    },
+                                    onDelete = {
+                                        deletingList = list
+                                    }
                                 )
                             }
 
@@ -281,6 +300,7 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
         }
     }
 
+    // Создание списка
     if (showCreateDialog) {
         AlertDialog(
             onDismissRequest = { showCreateDialog = false },
@@ -298,7 +318,9 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                     onValueChange = { newListName = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("Например, Покупки на выходные") },
+                    placeholder = {
+                        Text("Например, Покупки на выходные")
+                    },
                     shape = RoundedCornerShape(14.dp)
                 )
             },
@@ -306,6 +328,7 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                 TextButton(
                     onClick = {
                         val title = newListName.trim()
+
                         if (title.isNotEmpty()) {
                             viewModel.addList(title)
                             showCreateDialog = false
@@ -316,7 +339,122 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showCreateDialog = false }) {
+                TextButton(
+                    onClick = { showCreateDialog = false }
+                ) {
+                    Text("Отмена", color = TextMuted)
+                }
+            }
+        )
+    }
+
+    // Редактирование списка
+    if (editingList != null) {
+        AlertDialog(
+            onDismissRequest = { editingList = null },
+            containerColor = CardWhite,
+            title = {
+                Text(
+                    text = "Редактировать список",
+                    color = TextDark,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editListName,
+                        onValueChange = { editListName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Название") },
+                        shape = RoundedCornerShape(14.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = editListSubtitle,
+                        onValueChange = { editListSubtitle = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Описание") },
+                        placeholder = { Text("Например, на неделю") },
+                        shape = RoundedCornerShape(14.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val list = editingList
+                        val title = editListName.trim()
+
+                        if (list != null && title.isNotEmpty()) {
+                            viewModel.updateList(
+                                list = list,
+                                title = title,
+                                subtitle = editListSubtitle.trim()
+                            )
+                            editingList = null
+                        }
+                    }
+                ) {
+                    Text("Сохранить", color = DarkGreen)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { editingList = null }
+                ) {
+                    Text("Отмена", color = TextMuted)
+                }
+            }
+        )
+    }
+
+    // Подтверждение удаления списка
+    if (deletingList != null) {
+        AlertDialog(
+            onDismissRequest = { deletingList = null },
+            containerColor = CardWhite,
+            title = {
+                Text(
+                    text = "Удалить список?",
+                    color = TextDark,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Список «${deletingList?.title}» и все товары в нём будут удалены. Это действие нельзя отменить.",
+                    color = TextMuted
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deletingList?.let { list ->
+                            viewModel.deleteList(list)
+
+                            if (openedListId == list.id) {
+                                openedListId = null
+                            }
+                        }
+
+                        deletingList = null
+                    }
+                ) {
+                    Text(
+                        "Удалить",
+                        color = Color(0xFFB74343)
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { deletingList = null }
+                ) {
                     Text("Отмена", color = TextMuted)
                 }
             }
@@ -351,7 +489,10 @@ private fun ShoppingListRoute(
             viewModel.addProduct(list.id, name, category)
         },
         onProductBoughtChanged = { productId, bought ->
-            val entity = productEntities.firstOrNull { it.id == productId }
+            val entity = productEntities.firstOrNull {
+                it.id == productId
+            }
+
             if (entity != null) {
                 viewModel.setProductBought(entity, bought)
             }
@@ -388,9 +529,14 @@ private fun SummaryCard(
 
             Text(
                 text = when {
-                    totalItems == 0 -> "Добавь товары в свои списки"
-                    boughtItems == totalItems -> "Отлично! Всё куплено"
-                    else -> "Уже куплено $boughtItems из $totalItems товаров"
+                    totalItems == 0 ->
+                        "Добавь товары в свои списки"
+
+                    boughtItems == totalItems ->
+                        "Отлично! Всё куплено"
+
+                    else ->
+                        "Уже куплено $boughtItems из $totalItems товаров"
                 },
                 fontSize = 14.sp,
                 color = TextMuted
@@ -424,16 +570,28 @@ private fun SummaryCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                SummaryMetric(value = "$listCount", label = "списков")
-                SummaryMetric(value = "$totalItems", label = "товаров")
-                SummaryMetric(value = "${(progress * 100).toInt()}%", label = "выполнено")
+                SummaryMetric(
+                    value = "$listCount",
+                    label = "списков"
+                )
+                SummaryMetric(
+                    value = "$totalItems",
+                    label = "товаров"
+                )
+                SummaryMetric(
+                    value = "${(progress * 100).toInt()}%",
+                    label = "выполнено"
+                )
             }
         }
     }
 }
 
 @Composable
-private fun SummaryMetric(value: String, label: String) {
+private fun SummaryMetric(
+    value: String,
+    label: String
+) {
     Column {
         Text(
             text = value,
@@ -441,6 +599,7 @@ private fun SummaryMetric(value: String, label: String) {
             fontWeight = FontWeight.Bold,
             color = DarkGreen
         )
+
         Text(
             text = label,
             fontSize = 12.sp,
@@ -454,8 +613,12 @@ private fun ShoppingListCard(
     list: ShoppingListEntity,
     totalItems: Int,
     boughtItems: Int,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
     val progress = if (totalItems == 0) 0f
     else boughtItems.toFloat() / totalItems.toFloat()
 
@@ -470,13 +633,11 @@ private fun ShoppingListCard(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val iconBackground = Color(list.color)
-
             Box(
                 modifier = Modifier
                     .size(54.dp)
                     .background(
-                        iconBackground,
+                        Color(list.color),
                         RoundedCornerShape(17.dp)
                     ),
                 contentAlignment = Alignment.Center
@@ -501,7 +662,9 @@ private fun ShoppingListCard(
                 )
 
                 Text(
-                    text = list.subtitle.ifBlank { "Мой список покупок" },
+                    text = list.subtitle.ifBlank {
+                        "Мой список покупок"
+                    },
                     fontSize = 13.sp,
                     color = TextMuted
                 )
@@ -537,11 +700,45 @@ private fun ShoppingListCard(
                 )
             }
 
-            Text(
-                text = "›",
-                fontSize = 30.sp,
-                color = TextMuted
-            )
+            Box {
+                TextButton(
+                    onClick = { menuExpanded = true }
+                ) {
+                    Text(
+                        text = "⋮",
+                        fontSize = 25.sp,
+                        color = TextMuted
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = {
+                        menuExpanded = false
+                    }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Редактировать") },
+                        onClick = {
+                            menuExpanded = false
+                            onEdit()
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "Удалить",
+                                color = Color(0xFFB74343)
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            onDelete()
+                        }
+                    )
+                }
+            }
         }
     }
 }
@@ -558,12 +755,15 @@ private fun EmptyListsCard() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("🛍️", fontSize = 34.sp)
+
             Spacer(modifier = Modifier.height(8.dp))
+
             Text(
                 text = "У тебя пока нет списков",
                 color = TextDark,
                 fontWeight = FontWeight.SemiBold
             )
+
             Text(
                 text = "Создай первый список покупок",
                 color = TextMuted,
