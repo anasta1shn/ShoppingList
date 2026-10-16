@@ -26,6 +26,9 @@ class ShoppingRepository(
     suspend fun insertList(list: ShoppingListEntity): Long =
         shoppingListDao.insertList(list)
 
+    suspend fun getListsCount(): Int =
+        shoppingListDao.getListsCount()
+
     suspend fun updateList(list: ShoppingListEntity) {
         shoppingListDao.updateList(list)
     }

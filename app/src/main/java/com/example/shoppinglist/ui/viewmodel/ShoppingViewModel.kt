@@ -7,7 +7,6 @@ import com.example.shoppinglist.data.ShoppingRepository
 import com.example.shoppinglist.data.local.ShoppingListEntity
 import com.example.shoppinglist.data.local.ShoppingProductEntity
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -143,7 +142,7 @@ class ShoppingViewModel(
 
     fun createInitialDataIfEmpty() {
         viewModelScope.launch {
-            if (repository.allLists.first().isEmpty()) {
+            if (repository.getListsCount() == 0) {
                 val weeklyId = repository.insertList(
                     ShoppingListEntity(
                         title = "На неделю",

@@ -15,6 +15,9 @@ interface ShoppingListDao {
     @Query("SELECT * FROM shopping_lists ORDER BY createdAt DESC")
     fun getAllLists(): Flow<List<ShoppingListEntity>>
 
+    @Query("SELECT COUNT(*) FROM shopping_lists")
+    suspend fun getListsCount(): Int
+
     @Query("SELECT * FROM shopping_lists WHERE id = :listId LIMIT 1")
     fun getListById(listId: Int): Flow<ShoppingListEntity?>
 
