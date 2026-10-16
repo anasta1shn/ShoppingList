@@ -526,6 +526,10 @@ private fun ShoppingListRoute(
                 )
             }
         },
+        onCompleteList = {
+            viewModel.completeList(list)
+        },
+
         onDeleteProduct = { productId ->
             val entity = productEntities.firstOrNull {
                 it.id == productId

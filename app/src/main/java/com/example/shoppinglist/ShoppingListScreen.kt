@@ -64,6 +64,7 @@ fun ShoppingListScreen(
     listName: String,
     products: List<ShoppingProduct>,
     onBack: () -> Unit,
+    onCompleteList: () -> Unit,
     onAddProduct: (String, String) -> Unit,
     onProductBoughtChanged: (Int, Boolean) -> Unit,
     onDeleteBoughtProducts: () -> Unit,
@@ -82,6 +83,7 @@ fun ShoppingListScreen(
     var deletingProduct by remember {
         mutableStateOf<ShoppingProduct?>(null)
     }
+    var showCompleteDialog by remember { mutableStateOf(false) }
 
     val boughtCount = products.count { it.bought }
     val totalCount = products.size
@@ -103,6 +105,7 @@ fun ShoppingListScreen(
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Заголовок и кнопка назад
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -140,8 +143,31 @@ fun ShoppingListScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
+        // Завершение покупок
+        if (totalCount > 0) {
+            Button(
+                onClick = { showCompleteDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = DarkGreen
+                )
+            ) {
+                Text(
+                    text = "✓  Завершить покупки",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Добавление товара
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = CardWhite,
@@ -170,7 +196,6 @@ fun ShoppingListScreen(
                     keyboardActions = KeyboardActions(
                         onDone = {
                             val name = productName.trim()
-
                             if (name.isNotEmpty()) {
                                 onAddProduct(name, selectedCategory)
                                 productName = ""
@@ -226,7 +251,6 @@ fun ShoppingListScreen(
                 Button(
                     onClick = {
                         val name = productName.trim()
-
                         if (name.isNotEmpty()) {
                             onAddProduct(name, selectedCategory)
                             productName = ""
@@ -245,6 +269,7 @@ fun ShoppingListScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Заголовок товаров
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -295,7 +320,8 @@ fun ShoppingListScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 val groupedProducts = products.groupBy { it.category }
@@ -448,6 +474,48 @@ fun ShoppingListScreen(
         }
     }
 
+    // Подтверждение завершения покупок
+    if (showCompleteDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showCompleteDialog = false
+            },
+            containerColor = CardWhite,
+            title = {
+                Text(
+                    text = "Завершить покупки?",
+                    color = TextDark,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Список «$listName» переместится в историю. Его можно будет восстановить позже.",
+                    color = TextMuted
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCompleteDialog = false
+                        onCompleteList()
+                    }
+                ) {
+                    Text("Завершить", color = DarkGreen)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showCompleteDialog = false
+                    }
+                ) {
+                    Text("Отмена", color = TextMuted)
+                }
+            }
+        )
+    }
+
     // Диалог редактирования товара
     if (editingProduct != null) {
         AlertDialog(
@@ -488,8 +556,7 @@ fun ShoppingListScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         categories.forEach { category ->
-                            val selected =
-                                editProductCategory == category
+                            val selected = editProductCategory == category
 
                             Surface(
                                 modifier = Modifier.clickable {
