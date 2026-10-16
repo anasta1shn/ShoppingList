@@ -100,6 +100,22 @@ class ShoppingViewModel(
         }
     }
 
+
+    fun updateProductDetails(
+        product: ShoppingProductEntity,
+        name: String,
+        category: String
+    ) {
+        val updatedProduct = product.copy(
+            name = name.trim(),
+            category = category
+        )
+
+        viewModelScope.launch {
+            repository.updateProduct(updatedProduct)
+        }
+    }
+
     fun createInitialDataIfEmpty() {
         viewModelScope.launch {
             if (repository.allLists.first().isEmpty()) {

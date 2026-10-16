@@ -462,6 +462,7 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
     }
 }
 
+
 @Composable
 private fun ShoppingListRoute(
     list: ShoppingListEntity,
@@ -499,9 +500,32 @@ private fun ShoppingListRoute(
         },
         onDeleteBoughtProducts = {
             viewModel.deleteBoughtProducts(list.id)
+        },
+        onEditProduct = { productId, name, category ->
+            val entity = productEntities.firstOrNull {
+                it.id == productId
+            }
+
+            if (entity != null) {
+                viewModel.updateProductDetails(
+                    product = entity,
+                    name = name,
+                    category = category
+                )
+            }
+        },
+        onDeleteProduct = { productId ->
+            val entity = productEntities.firstOrNull {
+                it.id == productId
+            }
+
+            if (entity != null) {
+                viewModel.deleteProduct(entity)
+            }
         }
     )
 }
+
 
 @Composable
 private fun SummaryCard(

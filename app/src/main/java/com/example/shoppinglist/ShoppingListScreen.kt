@@ -19,17 +19,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,7 +58,6 @@ private val SoftGreen = Color(0xFFE6EBDD)
 private val TextDark = Color(0xFF28352B)
 private val TextMuted = Color(0xFF899087)
 private val CardWhite = Color(0xFFFFFEFA)
-private val SoftPeach = Color(0xFFF5E4D9)
 
 @Composable
 fun ShoppingListScreen(
@@ -66,13 +66,26 @@ fun ShoppingListScreen(
     onBack: () -> Unit,
     onAddProduct: (String, String) -> Unit,
     onProductBoughtChanged: (Int, Boolean) -> Unit,
-    onDeleteBoughtProducts: () -> Unit
+    onDeleteBoughtProducts: () -> Unit,
+    onEditProduct: (Int, String, String) -> Unit,
+    onDeleteProduct: (Int) -> Unit
 ) {
     var productName by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Другое") }
 
+    var editingProduct by remember {
+        mutableStateOf<ShoppingProduct?>(null)
+    }
+    var editProductName by remember { mutableStateOf("") }
+    var editProductCategory by remember { mutableStateOf("Другое") }
+
+    var deletingProduct by remember {
+        mutableStateOf<ShoppingProduct?>(null)
+    }
+
     val boughtCount = products.count { it.bought }
     val totalCount = products.size
+
     val categories = listOf(
         "Молочные продукты",
         "Овощи и фрукты",
@@ -118,6 +131,7 @@ fun ShoppingListScreen(
                     fontWeight = FontWeight.Bold,
                     color = TextDark
                 )
+
                 Text(
                     text = "$boughtCount из $totalCount куплено",
                     fontSize = 14.sp,
@@ -150,10 +164,13 @@ fun ShoppingListScreen(
                     placeholder = { Text("Например, хлеб") },
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Done
+                    ),
                     keyboardActions = KeyboardActions(
                         onDone = {
                             val name = productName.trim()
+
                             if (name.isNotEmpty()) {
                                 onAddProduct(name, selectedCategory)
                                 productName = ""
@@ -178,6 +195,7 @@ fun ShoppingListScreen(
                 ) {
                     categories.forEach { category ->
                         val selected = selectedCategory == category
+
                         Surface(
                             modifier = Modifier.clickable {
                                 selectedCategory = category
@@ -193,8 +211,11 @@ fun ShoppingListScreen(
                                 ),
                                 color = if (selected) DarkGreen else TextMuted,
                                 fontSize = 12.sp,
-                                fontWeight = if (selected) FontWeight.SemiBold
-                                else FontWeight.Normal
+                                fontWeight = if (selected) {
+                                    FontWeight.SemiBold
+                                } else {
+                                    FontWeight.Normal
+                                }
                             )
                         }
                     }
@@ -205,6 +226,7 @@ fun ShoppingListScreen(
                 Button(
                     onClick = {
                         val name = productName.trim()
+
                         if (name.isNotEmpty()) {
                             onAddProduct(name, selectedCategory)
                             productName = ""
@@ -255,12 +277,15 @@ fun ShoppingListScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text("🛒", fontSize = 34.sp)
+
                     Spacer(modifier = Modifier.height(8.dp))
+
                     Text(
                         text = "Список пока пуст",
                         fontWeight = FontWeight.SemiBold,
                         color = TextDark
                     )
+
                     Text(
                         text = "Добавь товары, чтобы ничего не забыть",
                         color = TextMuted,
@@ -294,6 +319,10 @@ fun ShoppingListScreen(
                         items = categoryProducts,
                         key = { it.id }
                     ) { product ->
+                        var menuExpanded by remember {
+                            mutableStateOf(false)
+                        }
+
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             color = CardWhite,
@@ -302,15 +331,9 @@ fun ShoppingListScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        onProductBoughtChanged(
-                                            product.id,
-                                            !product.bought
-                                        )
-                                    }
                                     .padding(
-                                        horizontal = 12.dp,
-                                        vertical = 8.dp
+                                        horizontal = 8.dp,
+                                        vertical = 6.dp
                                     ),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -327,23 +350,91 @@ fun ShoppingListScreen(
                                     )
                                 )
 
-                                Text(
-                                    text = product.name,
+                                Column(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .padding(start = 6.dp),
-                                    color = if (product.bought) TextMuted
-                                    else TextDark,
-                                    fontSize = 15.sp,
-                                    textDecoration = if (product.bought) {
-                                        TextDecoration.LineThrough
-                                    } else {
-                                        TextDecoration.None
-                                    }
-                                )
+                                        .clickable {
+                                            onProductBoughtChanged(
+                                                product.id,
+                                                !product.bought
+                                            )
+                                        }
+                                ) {
+                                    Text(
+                                        text = product.name,
+                                        color = if (product.bought) {
+                                            TextMuted
+                                        } else {
+                                            TextDark
+                                        },
+                                        fontSize = 15.sp,
+                                        textDecoration = if (product.bought) {
+                                            TextDecoration.LineThrough
+                                        } else {
+                                            TextDecoration.None
+                                        }
+                                    )
+
+                                    Text(
+                                        text = product.category,
+                                        fontSize = 12.sp,
+                                        color = TextMuted
+                                    )
+                                }
 
                                 if (product.bought) {
-                                    Text("✓", color = DarkGreen, fontSize = 18.sp)
+                                    Text(
+                                        text = "✓",
+                                        color = DarkGreen,
+                                        fontSize = 18.sp
+                                    )
+                                }
+
+                                Box {
+                                    TextButton(
+                                        onClick = {
+                                            menuExpanded = true
+                                        }
+                                    ) {
+                                        Text(
+                                            text = "⋮",
+                                            fontSize = 24.sp,
+                                            color = TextMuted
+                                        )
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = menuExpanded,
+                                        onDismissRequest = {
+                                            menuExpanded = false
+                                        }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text("Редактировать")
+                                            },
+                                            onClick = {
+                                                menuExpanded = false
+                                                editProductName = product.name
+                                                editProductCategory =
+                                                    product.category
+                                                editingProduct = product
+                                            }
+                                        )
+
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    "Удалить",
+                                                    color = Color(0xFFB74343)
+                                                )
+                                            },
+                                            onClick = {
+                                                menuExpanded = false
+                                                deletingProduct = product
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -355,5 +446,152 @@ fun ShoppingListScreen(
                 }
             }
         }
+    }
+
+    // Диалог редактирования товара
+    if (editingProduct != null) {
+        AlertDialog(
+            onDismissRequest = {
+                editingProduct = null
+            },
+            containerColor = CardWhite,
+            title = {
+                Text(
+                    text = "Редактировать товар",
+                    color = TextDark,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editProductName,
+                        onValueChange = { editProductName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Название товара") },
+                        shape = RoundedCornerShape(14.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "Категория",
+                        color = TextMuted,
+                        fontSize = 13.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    androidx.compose.foundation.layout.FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        categories.forEach { category ->
+                            val selected =
+                                editProductCategory == category
+
+                            Surface(
+                                modifier = Modifier.clickable {
+                                    editProductCategory = category
+                                },
+                                color = if (selected) SoftGreen else Cream,
+                                shape = RoundedCornerShape(50)
+                            ) {
+                                Text(
+                                    text = category,
+                                    modifier = Modifier.padding(
+                                        horizontal = 12.dp,
+                                        vertical = 8.dp
+                                    ),
+                                    color = if (selected) {
+                                        DarkGreen
+                                    } else {
+                                        TextMuted
+                                    },
+                                    fontSize = 12.sp,
+                                    fontWeight = if (selected) {
+                                        FontWeight.SemiBold
+                                    } else {
+                                        FontWeight.Normal
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val product = editingProduct
+                        val name = editProductName.trim()
+
+                        if (product != null && name.isNotEmpty()) {
+                            onEditProduct(
+                                product.id,
+                                name,
+                                editProductCategory
+                            )
+                            editingProduct = null
+                        }
+                    }
+                ) {
+                    Text("Сохранить", color = DarkGreen)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { editingProduct = null }
+                ) {
+                    Text("Отмена", color = TextMuted)
+                }
+            }
+        )
+    }
+
+    // Подтверждение удаления товара
+    if (deletingProduct != null) {
+        AlertDialog(
+            onDismissRequest = {
+                deletingProduct = null
+            },
+            containerColor = CardWhite,
+            title = {
+                Text(
+                    text = "Удалить товар?",
+                    color = TextDark,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Удалить «${deletingProduct?.name}» из списка?",
+                    color = TextMuted
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deletingProduct?.let { product ->
+                            onDeleteProduct(product.id)
+                        }
+                        deletingProduct = null
+                    }
+                ) {
+                    Text(
+                        "Удалить",
+                        color = Color(0xFFB74343)
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { deletingProduct = null }
+                ) {
+                    Text("Отмена", color = TextMuted)
+                }
+            }
+        )
     }
 }
