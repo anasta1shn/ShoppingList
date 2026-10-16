@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
     val lists by viewModel.shoppingLists.collectAsState()
+    val completedLists by viewModel.completedLists.collectAsState()
 
     var openedListId by remember { mutableStateOf<Int?>(null) }
     var selectedTab by remember { mutableStateOf(0) }
@@ -225,8 +226,12 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                                         editListSubtitle = list.subtitle
                                         editingList = list
                                     },
+
                                     onDelete = {
                                         deletingList = list
+                                    },
+                                    onComplete = {
+                                        viewModel.completeList(list)
                                     }
                                 )
                             }
@@ -263,10 +268,17 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                 }
             }
 
-            1 -> PlaceholderTab(
-                title = "История",
-                description = "Здесь появится история покупок"
-            )
+            1 -> {
+                CompletedListsTab(
+                    completedLists = completedLists,
+                    onRestore = { list ->
+                        viewModel.restoreList(list)
+                    },
+                    onDelete = { list ->
+                        viewModel.deleteList(list)
+                    }
+                )
+            }
 
             else -> PlaceholderTab(
                 title = "Профиль",
@@ -639,7 +651,8 @@ private fun ShoppingListCard(
     boughtItems: Int,
     onClick: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onComplete: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -750,6 +763,14 @@ private fun ShoppingListCard(
                     )
 
                     DropdownMenuItem(
+                        text = { Text("Завершить покупки") },
+                        onClick = {
+                            menuExpanded = false
+                            onComplete()
+                        }
+                    )
+
+                    DropdownMenuItem(
                         text = {
                             Text(
                                 "Удалить",
@@ -823,6 +844,176 @@ private fun PlaceholderTab(
             text = description,
             fontSize = 14.sp,
             color = TextMuted
+        )
+    }
+}
+
+
+@Composable
+private fun CompletedListsTab(
+    completedLists: List<ShoppingListEntity>,
+    onRestore: (ShoppingListEntity) -> Unit,
+    onDelete: (ShoppingListEntity) -> Unit
+) {
+    var deletingList by remember {
+        mutableStateOf<ShoppingListEntity?>(null)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Cream)
+            .padding(20.dp)
+    ) {
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "История покупок",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextDark
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Завершённые списки всегда под рукой",
+            fontSize = 14.sp,
+            color = TextMuted
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        if (completedLists.isEmpty()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = CardWhite,
+                shape = RoundedCornerShape(22.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("🛍️", fontSize = 36.sp)
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "История пока пуста",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextDark
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Завершённые покупки появятся здесь",
+                        fontSize = 13.sp,
+                        color = TextMuted
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(
+                    items = completedLists,
+                    key = { it.id }
+                ) { list ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = CardWhite,
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text(
+                                text = list.title,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextDark
+                            )
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Text(
+                                text = list.subtitle.ifBlank {
+                                    "Завершённый список покупок"
+                                },
+                                fontSize = 13.sp,
+                                color = TextMuted
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                TextButton(
+                                    onClick = { onRestore(list) }
+                                ) {
+                                    Text(
+                                        "Восстановить",
+                                        color = DarkGreen
+                                    )
+                                }
+
+                                TextButton(
+                                    onClick = { deletingList = list }
+                                ) {
+                                    Text(
+                                        "Удалить",
+                                        color = Color(0xFFB74343)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    deletingList?.let { list ->
+        AlertDialog(
+            onDismissRequest = { deletingList = null },
+            containerColor = CardWhite,
+            title = {
+                Text(
+                    text = "Удалить из истории?",
+                    color = TextDark
+                )
+            },
+            text = {
+                Text(
+                    text = "Список «${list.title}» и все товары в нём будут удалены.",
+                    color = TextMuted
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDelete(list)
+                        deletingList = null
+                    }
+                ) {
+                    Text(
+                        "Удалить",
+                        color = Color(0xFFB74343)
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { deletingList = null }
+                ) {
+                    Text("Отмена", color = TextMuted)
+                }
+            }
         )
     }
 }

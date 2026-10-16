@@ -21,6 +21,14 @@ class ShoppingViewModel(
         initialValue = emptyList()
     )
 
+
+    val completedLists = repository.completedLists.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList()
+    )
+
+
     fun getProductsForList(listId: Int) =
         repository.getProductsForList(listId)
 
@@ -65,6 +73,23 @@ class ShoppingViewModel(
                     name = name,
                     category = category
                 )
+            )
+        }
+    }
+
+
+    fun completeList(list: ShoppingListEntity) {
+        viewModelScope.launch {
+            repository.updateList(
+                list.copy(isCompleted = true)
+            )
+        }
+    }
+
+    fun restoreList(list: ShoppingListEntity) {
+        viewModelScope.launch {
+            repository.updateList(
+                list.copy(isCompleted = false)
             )
         }
     }

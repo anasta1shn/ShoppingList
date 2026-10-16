@@ -12,8 +12,13 @@ class ShoppingRepository(
     private val shoppingProductDao: ShoppingProductDao
 ) {
 
+    // Активные списки
     val allLists: Flow<List<ShoppingListEntity>> =
         shoppingListDao.getAllLists()
+
+    // Завершённые списки для истории
+    val completedLists: Flow<List<ShoppingListEntity>> =
+        shoppingListDao.getCompletedLists()
 
     fun getListById(listId: Int): Flow<ShoppingListEntity?> =
         shoppingListDao.getListById(listId)

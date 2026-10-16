@@ -17,5 +17,7 @@ data class ShoppingListEntity(
 
     val color: Long = 0xFFE6EBDD,
 
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+
+    val isCompleted: Boolean = false
 )
