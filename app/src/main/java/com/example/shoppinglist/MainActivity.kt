@@ -549,18 +549,24 @@ private fun ShoppingHomeScreen(
                     onClick = {
                         val list = editingList
                         val title = editListName.trim()
+                        val subtitle = editListSubtitle.trim()
 
                         if (list != null && title.isNotEmpty()) {
                             viewModel.updateList(
                                 list = list,
                                 title = title,
-                                subtitle = editListSubtitle.trim()
+                                subtitle = subtitle
                             )
+
                             editingList = null
                         }
-                    }
+                    },
+                    enabled = editListName.trim().isNotEmpty()
                 ) {
-                    Text("Сохранить", color = colors.accent)
+                    Text(
+                        text = "Сохранить",
+                        color = colors.accent
+                    )
                 }
             },
             dismissButton = {
