@@ -73,6 +73,7 @@ fun ShoppingListScreen(
 ) {
     var productName by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Другое") }
+    var searchQuery by remember { mutableStateOf("") }
 
     var editingProduct by remember {
         mutableStateOf<ShoppingProduct?>(null)
@@ -269,6 +270,21 @@ fun ShoppingListScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Поиск товаров
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = {
+                Text("Найти товар...")
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp)
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+
         // Заголовок товаров
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -324,7 +340,12 @@ fun ShoppingListScreen(
                     .weight(1f),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                val groupedProducts = products.groupBy { it.category }
+                val filteredProducts = products.filter { product ->
+                    product.name.contains(searchQuery.trim(), ignoreCase = true) ||
+                            product.category.contains(searchQuery.trim(), ignoreCase = true)
+                }
+
+                val groupedProducts = filteredProducts.groupBy { it.category }
 
                 groupedProducts.forEach { (category, categoryProducts) ->
                     item(key = "category_$category") {
