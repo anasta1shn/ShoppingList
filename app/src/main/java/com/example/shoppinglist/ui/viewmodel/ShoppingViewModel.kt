@@ -60,6 +60,14 @@ class ShoppingViewModel(
         }
     }
 
+    fun clearCompletedLists() {
+        viewModelScope.launch {
+            completedLists.value.forEach { list ->
+                repository.deleteList(list)
+            }
+        }
+    }
+
     fun addProduct(
         listId: Int,
         name: String,

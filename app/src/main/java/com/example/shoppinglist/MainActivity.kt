@@ -1,4 +1,3 @@
-
 package com.example.shoppinglist
 
 import android.os.Bundle
@@ -276,6 +275,9 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                     },
                     onDelete = { list ->
                         viewModel.deleteList(list)
+                    },
+                    onClearHistory = {
+                        viewModel.clearCompletedLists()
                     }
                 )
             }
@@ -857,10 +859,14 @@ private fun PlaceholderTab(
 private fun CompletedListsTab(
     completedLists: List<ShoppingListEntity>,
     onRestore: (ShoppingListEntity) -> Unit,
-    onDelete: (ShoppingListEntity) -> Unit
+    onDelete: (ShoppingListEntity) -> Unit,
+    onClearHistory: () -> Unit
 ) {
     var deletingList by remember {
         mutableStateOf<ShoppingListEntity?>(null)
+    }
+    var showClearHistoryDialog by remember {
+        mutableStateOf(false)
     }
 
     Column(
@@ -877,6 +883,17 @@ private fun CompletedListsTab(
             fontWeight = FontWeight.Bold,
             color = TextDark
         )
+
+        if (completedLists.isNotEmpty()) {
+            TextButton(
+                onClick = { showClearHistoryDialog = true }
+            ) {
+                Text(
+                    text = "Очистить историю",
+                    color = Color(0xFFB74343)
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -1014,6 +1031,50 @@ private fun CompletedListsTab(
             dismissButton = {
                 TextButton(
                     onClick = { deletingList = null }
+                ) {
+                    Text("Отмена", color = TextMuted)
+                }
+            }
+        )
+    }
+
+    if (showClearHistoryDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showClearHistoryDialog = false
+            },
+            containerColor = CardWhite,
+            title = {
+                Text(
+                    text = "Очистить историю?",
+                    color = TextDark,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Все завершённые списки и товары в них будут удалены. Восстановить их будет нельзя.",
+                    color = TextMuted
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onClearHistory()
+                        showClearHistoryDialog = false
+                    }
+                ) {
+                    Text(
+                        text = "Удалить всё",
+                        color = Color(0xFFB74343)
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showClearHistoryDialog = false
+                    }
                 ) {
                     Text("Отмена", color = TextMuted)
                 }
