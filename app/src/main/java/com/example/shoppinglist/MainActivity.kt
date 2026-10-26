@@ -1,7 +1,10 @@
+
 package com.example.shoppinglist
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,6 +30,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -59,6 +63,45 @@ private val TextDark = Color(0xFF28352B)
 private val TextMuted = Color(0xFF899087)
 private val CardWhite = Color(0xFFFFFEFA)
 
+private val DarkBackground = Color(0xFF171C18)
+private val DarkCard = Color(0xFF222923)
+private val DarkSoftGreen = Color(0xFF303D32)
+private val DarkText = Color(0xFFE7EDE5)
+private val DarkMuted = Color(0xFFB0BBB0)
+private val DarkAccent = Color(0xFF9BC7A0)
+
+private data class AppPalette(
+    val background: Color,
+    val card: Color,
+    val softCard: Color,
+    val text: Color,
+    val muted: Color,
+    val accent: Color,
+    val progressBackground: Color
+)
+
+private fun palette(darkTheme: Boolean) = if (darkTheme) {
+    AppPalette(
+        background = DarkBackground,
+        card = DarkCard,
+        softCard = DarkSoftGreen,
+        text = DarkText,
+        muted = DarkMuted,
+        accent = DarkAccent,
+        progressBackground = Color(0xFF465247)
+    )
+} else {
+    AppPalette(
+        background = Cream,
+        card = CardWhite,
+        softCard = SoftGreen,
+        text = TextDark,
+        muted = TextMuted,
+        accent = DarkGreen,
+        progressBackground = Color(0xFFD2DCCB)
+    )
+}
+
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,26 +113,72 @@ class MainActivity : ComponentActivity() {
             database.shoppingProductDao()
         )
 
+        val preferences = getSharedPreferences(
+            "shopping_settings",
+            Context.MODE_PRIVATE
+        )
+
         setContent {
-            ShoppingListTheme {
+            val darkTheme = remember {
+                mutableStateOf(
+                    preferences.getBoolean("dark_theme", false)
+                )
+            }
+
+            ShoppingListTheme(darkTheme = darkTheme.value) {
                 val shoppingViewModel: ShoppingViewModel = viewModel(
                     factory = ShoppingViewModelFactory(repository)
                 )
 
-                ShoppingHomeScreen(viewModel = shoppingViewModel)
+                ShoppingHomeScreen(
+                    viewModel = shoppingViewModel,
+                    darkTheme = darkTheme.value,
+                    onDarkThemeChange = { enabled ->
+                        darkTheme.value = enabled
+                        preferences.edit()
+                            .putBoolean("dark_theme", enabled)
+                            .apply()
+                    },
+                    initialProfileName = preferences.getString(
+                        "profile_name",
+                        "Пользователь"
+                    ) ?: "Пользователь",
+                    onProfileNameChange = { name ->
+                        preferences.edit()
+                            .putString("profile_name", name)
+                            .apply()
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
+private fun ShoppingHomeScreen(
+    viewModel: ShoppingViewModel,
+    darkTheme: Boolean,
+    onDarkThemeChange: (Boolean) -> Unit,
+    initialProfileName: String,
+    onProfileNameChange: (String) -> Unit
+) {
+    val colors = palette(darkTheme)
     val lists by viewModel.shoppingLists.collectAsState()
     val completedLists by viewModel.completedLists.collectAsState()
 
     var openedListId by remember { mutableStateOf<Int?>(null) }
     var selectedTab by remember { mutableStateOf(0) }
+    var showSettings by remember { mutableStateOf(false) }
 
+    var profileName by remember {
+        mutableStateOf(initialProfileName)
+    }
+    var showEditProfileDialog by remember {
+        mutableStateOf(false)
+    }
+    var editedProfileName by remember {
+        mutableStateOf("")
+    }
     var showCreateDialog by remember { mutableStateOf(false) }
     var newListName by remember { mutableStateOf("") }
 
@@ -101,6 +190,21 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
 
     var deletingList by remember {
         mutableStateOf<ShoppingListEntity?>(null)
+    }
+
+    BackHandler(
+        enabled = openedListId != null ||
+                (selectedTab == 2 && showSettings) ||
+                selectedTab != 0
+    ) {
+        when {
+            openedListId != null -> openedListId = null
+            selectedTab == 2 && showSettings -> showSettings = false
+            selectedTab != 0 -> {
+                selectedTab = 0
+                showSettings = false
+            }
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -141,7 +245,7 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Cream)
+            .background(colors.background)
     ) {
         when (selectedTab) {
             0 -> {
@@ -157,13 +261,13 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                         text = "Мои покупки",
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextDark
+                        color = colors.text
                     )
 
                     Text(
                         text = "Всё необходимое — в одном месте",
                         fontSize = 14.sp,
-                        color = TextMuted
+                        color = colors.muted
                     )
 
                     Spacer(modifier = Modifier.height(20.dp))
@@ -174,7 +278,8 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                     SummaryCard(
                         listCount = lists.size,
                         totalItems = totalItems,
-                        boughtItems = boughtItems
+                        boughtItems = boughtItems,
+                        colors = colors
                     )
 
                     Spacer(modifier = Modifier.height(22.dp))
@@ -188,50 +293,41 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                             modifier = Modifier.weight(1f),
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextDark
+                            color = colors.text
                         )
 
                         Text(
                             text = "${lists.size} списка",
                             fontSize = 13.sp,
-                            color = TextMuted
+                            color = colors.muted
                         )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
                     if (lists.isEmpty()) {
-                        EmptyListsCard()
+                        EmptyListsCard(colors)
                     } else {
                         LazyColumn(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(
-                                items = lists,
-                                key = { it.id }
-                            ) { list ->
+                            items(items = lists, key = { it.id }) { list ->
                                 val counts = productCounts[list.id] ?: (0 to 0)
 
                                 ShoppingListCard(
                                     list = list,
                                     totalItems = counts.first,
                                     boughtItems = counts.second,
-                                    onClick = {
-                                        openedListId = list.id
-                                    },
+                                    colors = colors,
+                                    onClick = { openedListId = list.id },
                                     onEdit = {
                                         editListName = list.title
                                         editListSubtitle = list.subtitle
                                         editingList = list
                                     },
-
-                                    onDelete = {
-                                        deletingList = list
-                                    },
-                                    onComplete = {
-                                        viewModel.completeList(list)
-                                    }
+                                    onDelete = { deletingList = list },
+                                    onComplete = { viewModel.completeList(list) }
                                 )
                             }
 
@@ -253,7 +349,7 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                             .height(54.dp),
                         shape = RoundedCornerShape(17.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = DarkGreen
+                            containerColor = colors.accent
                         )
                     ) {
                         Text(
@@ -270,26 +366,40 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
             1 -> {
                 CompletedListsTab(
                     completedLists = completedLists,
-                    onRestore = { list ->
-                        viewModel.restoreList(list)
-                    },
-                    onDelete = { list ->
-                        viewModel.deleteList(list)
-                    },
-                    onClearHistory = {
-                        viewModel.clearCompletedLists()
-                    }
+                    colors = colors,
+                    onRestore = viewModel::restoreList,
+                    onDelete = viewModel::deleteList,
+                    onClearHistory = viewModel::clearCompletedLists
                 )
             }
 
-            else -> PlaceholderTab(
-                title = "Профиль",
-                description = "Настройки приложения появятся здесь"
-            )
+            else -> {
+                if (showSettings) {
+                    SettingsTab(
+                        darkTheme = darkTheme,
+                        colors = colors,
+                        onDarkThemeChange = onDarkThemeChange,
+                        onBack = { showSettings = false }
+                    )
+                } else {
+                    ProfileTab(
+                        profileName = profileName,
+                        listCount = lists.size,
+                        totalItems = productCounts.values.sumOf { it.first },
+                        boughtItems = productCounts.values.sumOf { it.second },
+                        colors = colors,
+                        onEditProfile = {
+                            editedProfileName = profileName
+                            showEditProfileDialog = true
+                        },
+                        onOpenSettings = { showSettings = true }
+                    )
+                }
+            }
         }
 
         NavigationBar(
-            containerColor = CardWhite
+            containerColor = colors.card
         ) {
             NavigationBarItem(
                 selected = selectedTab == 0,
@@ -314,15 +424,57 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
         }
     }
 
-    // Создание списка
+    if (showEditProfileDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditProfileDialog = false },
+            containerColor = colors.card,
+            title = {
+                Text(
+                    text = "Редактировать профиль",
+                    color = colors.text,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                OutlinedTextField(
+                    value = editedProfileName,
+                    onValueChange = { editedProfileName = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Твоё имя") },
+                    shape = RoundedCornerShape(14.dp)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val name = editedProfileName.trim()
+                        if (name.isNotEmpty()) {
+                            profileName = name
+                            onProfileNameChange(name)
+                            showEditProfileDialog = false
+                        }
+                    }
+                ) {
+                    Text("Сохранить", color = colors.accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditProfileDialog = false }) {
+                    Text("Отмена", color = colors.muted)
+                }
+            }
+        )
+    }
+
     if (showCreateDialog) {
         AlertDialog(
             onDismissRequest = { showCreateDialog = false },
-            containerColor = CardWhite,
+            containerColor = colors.card,
             title = {
                 Text(
                     text = "Новый список",
-                    color = TextDark,
+                    color = colors.text,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -332,9 +484,7 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                     onValueChange = { newListName = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = {
-                        Text("Например, Покупки на выходные")
-                    },
+                    placeholder = { Text("Например, Покупки на выходные") },
                     shape = RoundedCornerShape(14.dp)
                 )
             },
@@ -342,35 +492,31 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                 TextButton(
                     onClick = {
                         val title = newListName.trim()
-
                         if (title.isNotEmpty()) {
                             viewModel.addList(title)
                             showCreateDialog = false
                         }
                     }
                 ) {
-                    Text("Создать", color = DarkGreen)
+                    Text("Создать", color = colors.accent)
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = { showCreateDialog = false }
-                ) {
-                    Text("Отмена", color = TextMuted)
+                TextButton(onClick = { showCreateDialog = false }) {
+                    Text("Отмена", color = colors.muted)
                 }
             }
         )
     }
 
-    // Редактирование списка
     if (editingList != null) {
         AlertDialog(
             onDismissRequest = { editingList = null },
-            containerColor = CardWhite,
+            containerColor = colors.card,
             title = {
                 Text(
                     text = "Редактировать список",
-                    color = TextDark,
+                    color = colors.text,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -414,68 +560,52 @@ private fun ShoppingHomeScreen(viewModel: ShoppingViewModel) {
                         }
                     }
                 ) {
-                    Text("Сохранить", color = DarkGreen)
+                    Text("Сохранить", color = colors.accent)
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = { editingList = null }
-                ) {
-                    Text("Отмена", color = TextMuted)
+                TextButton(onClick = { editingList = null }) {
+                    Text("Отмена", color = colors.muted)
                 }
             }
         )
     }
 
-    // Подтверждение удаления списка
     if (deletingList != null) {
         AlertDialog(
             onDismissRequest = { deletingList = null },
-            containerColor = CardWhite,
+            containerColor = colors.card,
             title = {
                 Text(
                     text = "Удалить список?",
-                    color = TextDark,
+                    color = colors.text,
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
                     text = "Список «${deletingList?.title}» и все товары в нём будут удалены. Это действие нельзя отменить.",
-                    color = TextMuted
+                    color = colors.muted
                 )
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        deletingList?.let { list ->
-                            viewModel.deleteList(list)
-
-                            if (openedListId == list.id) {
-                                openedListId = null
-                            }
-                        }
-
+                        deletingList?.let(viewModel::deleteList)
                         deletingList = null
                     }
                 ) {
-                    Text(
-                        "Удалить",
-                        color = Color(0xFFB74343)
-                    )
+                    Text("Удалить", color = Color(0xFFB74343))
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = { deletingList = null }
-                ) {
-                    Text("Отмена", color = TextMuted)
+                TextButton(onClick = { deletingList = null }) {
+                    Text("Отмена", color = colors.muted)
                 }
             }
         )
     }
 }
-
 
 @Composable
 private fun ShoppingListRoute(
@@ -504,59 +634,44 @@ private fun ShoppingListRoute(
             viewModel.addProduct(list.id, name, category)
         },
         onProductBoughtChanged = { productId, bought ->
-            val entity = productEntities.firstOrNull {
-                it.id == productId
-            }
-
-            if (entity != null) {
-                viewModel.setProductBought(entity, bought)
+            productEntities.firstOrNull { it.id == productId }?.let {
+                viewModel.setProductBought(it, bought)
             }
         },
         onDeleteBoughtProducts = {
             viewModel.deleteBoughtProducts(list.id)
         },
         onEditProduct = { productId, name, category ->
-            val entity = productEntities.firstOrNull {
-                it.id == productId
-            }
-
-            if (entity != null) {
+            productEntities.firstOrNull { it.id == productId }?.let {
                 viewModel.updateProductDetails(
-                    product = entity,
+                    product = it,
                     name = name,
                     category = category
                 )
             }
         },
-        onCompleteList = {
-            viewModel.completeList(list)
-        },
-
+        onCompleteList = { viewModel.completeList(list) },
         onDeleteProduct = { productId ->
-            val entity = productEntities.firstOrNull {
-                it.id == productId
-            }
-
-            if (entity != null) {
-                viewModel.deleteProduct(entity)
+            productEntities.firstOrNull { it.id == productId }?.let {
+                viewModel.deleteProduct(it)
             }
         }
     )
 }
 
-
 @Composable
 private fun SummaryCard(
     listCount: Int,
     totalItems: Int,
-    boughtItems: Int
+    boughtItems: Int,
+    colors: AppPalette
 ) {
     val progress = if (totalItems == 0) 0f
     else boughtItems.toFloat() / totalItems.toFloat()
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = SoftGreen,
+        color = colors.softCard,
         shape = RoundedCornerShape(24.dp)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
@@ -564,24 +679,19 @@ private fun SummaryCard(
                 text = "Покупки под контролем",
                 fontSize = 19.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextDark
+                color = colors.text
             )
 
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
                 text = when {
-                    totalItems == 0 ->
-                        "Добавь товары в свои списки"
-
-                    boughtItems == totalItems ->
-                        "Отлично! Всё куплено"
-
-                    else ->
-                        "Уже куплено $boughtItems из $totalItems товаров"
+                    totalItems == 0 -> "Добавь товары в свои списки"
+                    boughtItems == totalItems -> "Отлично! Всё куплено"
+                    else -> "Уже куплено $boughtItems из $totalItems товаров"
                 },
                 fontSize = 14.sp,
-                color = TextMuted
+                color = colors.muted
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -591,7 +701,7 @@ private fun SummaryCard(
                     .fillMaxWidth()
                     .height(8.dp)
                     .background(
-                        Color(0xFFD2DCCB),
+                        colors.progressBackground,
                         RoundedCornerShape(50)
                     )
             ) {
@@ -599,10 +709,7 @@ private fun SummaryCard(
                     modifier = Modifier
                         .fillMaxWidth(progress)
                         .height(8.dp)
-                        .background(
-                            DarkGreen,
-                            RoundedCornerShape(50)
-                        )
+                        .background(colors.accent, RoundedCornerShape(50))
                 )
             }
 
@@ -612,18 +719,9 @@ private fun SummaryCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                SummaryMetric(
-                    value = "$listCount",
-                    label = "списков"
-                )
-                SummaryMetric(
-                    value = "$totalItems",
-                    label = "товаров"
-                )
-                SummaryMetric(
-                    value = "${(progress * 100).toInt()}%",
-                    label = "выполнено"
-                )
+                SummaryMetric("$listCount", "списков", colors)
+                SummaryMetric("$totalItems", "товаров", colors)
+                SummaryMetric("${(progress * 100).toInt()}%", "выполнено", colors)
             }
         }
     }
@@ -632,20 +730,20 @@ private fun SummaryCard(
 @Composable
 private fun SummaryMetric(
     value: String,
-    label: String
+    label: String,
+    colors: AppPalette
 ) {
     Column {
         Text(
             text = value,
             fontSize = 21.sp,
             fontWeight = FontWeight.Bold,
-            color = DarkGreen
+            color = colors.accent
         )
-
         Text(
             text = label,
             fontSize = 12.sp,
-            color = TextMuted
+            color = colors.muted
         )
     }
 }
@@ -655,6 +753,7 @@ private fun ShoppingListCard(
     list: ShoppingListEntity,
     totalItems: Int,
     boughtItems: Int,
+    colors: AppPalette,
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -669,7 +768,7 @@ private fun ShoppingListCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        color = CardWhite,
+        color = colors.card,
         shape = RoundedCornerShape(22.dp)
     ) {
         Row(
@@ -688,7 +787,7 @@ private fun ShoppingListCard(
                 Text(
                     text = list.icon,
                     fontSize = 24.sp,
-                    color = DarkGreen
+                    color = colors.accent
                 )
             }
 
@@ -701,15 +800,12 @@ private fun ShoppingListCard(
                     text = list.title,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = TextDark
+                    color = colors.text
                 )
-
                 Text(
-                    text = list.subtitle.ifBlank {
-                        "Мой список покупок"
-                    },
+                    text = list.subtitle.ifBlank { "Мой список покупок" },
                     fontSize = 13.sp,
-                    color = TextMuted
+                    color = colors.muted
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -719,7 +815,7 @@ private fun ShoppingListCard(
                         .fillMaxWidth()
                         .height(6.dp)
                         .background(
-                            Color(0xFFE9EAE3),
+                            colors.progressBackground,
                             RoundedCornerShape(50)
                         )
                 ) {
@@ -727,10 +823,7 @@ private fun ShoppingListCard(
                         modifier = Modifier
                             .fillMaxWidth(progress)
                             .height(6.dp)
-                            .background(
-                                DarkGreen,
-                                RoundedCornerShape(50)
-                            )
+                            .background(colors.accent, RoundedCornerShape(50))
                     )
                 }
 
@@ -739,26 +832,18 @@ private fun ShoppingListCard(
                 Text(
                     text = "$boughtItems из $totalItems куплено",
                     fontSize = 12.sp,
-                    color = TextMuted
+                    color = colors.muted
                 )
             }
 
             Box {
-                TextButton(
-                    onClick = { menuExpanded = true }
-                ) {
-                    Text(
-                        text = "⋮",
-                        fontSize = 25.sp,
-                        color = TextMuted
-                    )
+                TextButton(onClick = { menuExpanded = true }) {
+                    Text("⋮", fontSize = 25.sp, color = colors.muted)
                 }
 
                 DropdownMenu(
                     expanded = menuExpanded,
-                    onDismissRequest = {
-                        menuExpanded = false
-                    }
+                    onDismissRequest = { menuExpanded = false }
                 ) {
                     DropdownMenuItem(
                         text = { Text("Редактировать") },
@@ -767,7 +852,6 @@ private fun ShoppingListCard(
                             onEdit()
                         }
                     )
-
                     DropdownMenuItem(
                         text = { Text("Завершить покупки") },
                         onClick = {
@@ -775,14 +859,8 @@ private fun ShoppingListCard(
                             onComplete()
                         }
                     )
-
                     DropdownMenuItem(
-                        text = {
-                            Text(
-                                "Удалить",
-                                color = Color(0xFFB74343)
-                            )
-                        },
+                        text = { Text("Удалить", color = Color(0xFFB74343)) },
                         onClick = {
                             menuExpanded = false
                             onDelete()
@@ -795,10 +873,10 @@ private fun ShoppingListCard(
 }
 
 @Composable
-private fun EmptyListsCard() {
+private fun EmptyListsCard(colors: AppPalette) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = CardWhite,
+        color = colors.card,
         shape = RoundedCornerShape(20.dp)
     ) {
         Column(
@@ -806,18 +884,15 @@ private fun EmptyListsCard() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("🛍️", fontSize = 34.sp)
-
             Spacer(modifier = Modifier.height(8.dp))
-
             Text(
                 text = "У тебя пока нет списков",
-                color = TextDark,
+                color = colors.text,
                 fontWeight = FontWeight.SemiBold
             )
-
             Text(
                 text = "Создай первый список покупок",
-                color = TextMuted,
+                color = colors.muted,
                 fontSize = 13.sp
             )
         }
@@ -825,54 +900,20 @@ private fun EmptyListsCard() {
 }
 
 @Composable
-private fun PlaceholderTab(
-    title: String,
-    description: String
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Cream)
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = title,
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextDark
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Text(
-            text = description,
-            fontSize = 14.sp,
-            color = TextMuted
-        )
-    }
-}
-
-
-@Composable
 private fun CompletedListsTab(
     completedLists: List<ShoppingListEntity>,
+    colors: AppPalette,
     onRestore: (ShoppingListEntity) -> Unit,
     onDelete: (ShoppingListEntity) -> Unit,
     onClearHistory: () -> Unit
 ) {
-    var deletingList by remember {
-        mutableStateOf<ShoppingListEntity?>(null)
-    }
-    var showClearHistoryDialog by remember {
-        mutableStateOf(false)
-    }
+    var deletingList by remember { mutableStateOf<ShoppingListEntity?>(null) }
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Cream)
+            .background(colors.background)
             .padding(20.dp)
     ) {
         Spacer(modifier = Modifier.height(24.dp))
@@ -881,17 +922,12 @@ private fun CompletedListsTab(
             text = "История покупок",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
-            color = TextDark
+            color = colors.text
         )
 
         if (completedLists.isNotEmpty()) {
-            TextButton(
-                onClick = { showClearHistoryDialog = true }
-            ) {
-                Text(
-                    text = "Очистить историю",
-                    color = Color(0xFFB74343)
-                )
+            TextButton(onClick = { showClearHistoryDialog = true }) {
+                Text("Очистить историю", color = Color(0xFFB74343))
             }
         }
 
@@ -900,7 +936,7 @@ private fun CompletedListsTab(
         Text(
             text = "Завершённые списки всегда под рукой",
             fontSize = 14.sp,
-            color = TextMuted
+            color = colors.muted
         )
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -908,7 +944,7 @@ private fun CompletedListsTab(
         if (completedLists.isEmpty()) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = CardWhite,
+                color = colors.card,
                 shape = RoundedCornerShape(22.dp)
             ) {
                 Column(
@@ -916,22 +952,18 @@ private fun CompletedListsTab(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text("🛍️", fontSize = 36.sp)
-
                     Spacer(modifier = Modifier.height(12.dp))
-
                     Text(
                         text = "История пока пуста",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = TextDark
+                        color = colors.text
                     )
-
                     Spacer(modifier = Modifier.height(6.dp))
-
                     Text(
                         text = "Завершённые покупки появятся здесь",
                         fontSize = 13.sp,
-                        color = TextMuted
+                        color = colors.muted
                     )
                 }
             }
@@ -939,57 +971,37 @@ private fun CompletedListsTab(
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(
-                    items = completedLists,
-                    key = { it.id }
-                ) { list ->
+                items(items = completedLists, key = { it.id }) { list ->
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        color = CardWhite,
+                        color = colors.card,
                         shape = RoundedCornerShape(20.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp)
-                        ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Text(
                                 text = list.title,
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = TextDark
+                                color = colors.text
                             )
-
                             Spacer(modifier = Modifier.height(4.dp))
-
                             Text(
                                 text = list.subtitle.ifBlank {
                                     "Завершённый список покупок"
                                 },
                                 fontSize = 13.sp,
-                                color = TextMuted
+                                color = colors.muted
                             )
-
                             Spacer(modifier = Modifier.height(12.dp))
-
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                TextButton(
-                                    onClick = { onRestore(list) }
-                                ) {
-                                    Text(
-                                        "Восстановить",
-                                        color = DarkGreen
-                                    )
+                                TextButton(onClick = { onRestore(list) }) {
+                                    Text("Восстановить", color = colors.accent)
                                 }
-
-                                TextButton(
-                                    onClick = { deletingList = list }
-                                ) {
-                                    Text(
-                                        "Удалить",
-                                        color = Color(0xFFB74343)
-                                    )
+                                TextButton(onClick = { deletingList = list }) {
+                                    Text("Удалить", color = Color(0xFFB74343))
                                 }
                             }
                         }
@@ -1002,17 +1014,14 @@ private fun CompletedListsTab(
     deletingList?.let { list ->
         AlertDialog(
             onDismissRequest = { deletingList = null },
-            containerColor = CardWhite,
+            containerColor = colors.card,
             title = {
-                Text(
-                    text = "Удалить из истории?",
-                    color = TextDark
-                )
+                Text("Удалить из истории?", color = colors.text)
             },
             text = {
                 Text(
-                    text = "Список «${list.title}» и все товары в нём будут удалены.",
-                    color = TextMuted
+                    "Список «${list.title}» и все товары в нём будут удалены.",
+                    color = colors.muted
                 )
             },
             confirmButton = {
@@ -1022,17 +1031,12 @@ private fun CompletedListsTab(
                         deletingList = null
                     }
                 ) {
-                    Text(
-                        "Удалить",
-                        color = Color(0xFFB74343)
-                    )
+                    Text("Удалить", color = Color(0xFFB74343))
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = { deletingList = null }
-                ) {
-                    Text("Отмена", color = TextMuted)
+                TextButton(onClick = { deletingList = null }) {
+                    Text("Отмена", color = colors.muted)
                 }
             }
         )
@@ -1040,21 +1044,19 @@ private fun CompletedListsTab(
 
     if (showClearHistoryDialog) {
         AlertDialog(
-            onDismissRequest = {
-                showClearHistoryDialog = false
-            },
-            containerColor = CardWhite,
+            onDismissRequest = { showClearHistoryDialog = false },
+            containerColor = colors.card,
             title = {
                 Text(
-                    text = "Очистить историю?",
-                    color = TextDark,
+                    "Очистить историю?",
+                    color = colors.text,
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
-                    text = "Все завершённые списки и товары в них будут удалены. Восстановить их будет нельзя.",
-                    color = TextMuted
+                    "Все завершённые списки и товары в них будут удалены. Восстановить их будет нельзя.",
+                    color = colors.muted
                 )
             },
             confirmButton = {
@@ -1064,21 +1066,280 @@ private fun CompletedListsTab(
                         showClearHistoryDialog = false
                     }
                 ) {
-                    Text(
-                        text = "Удалить всё",
-                        color = Color(0xFFB74343)
-                    )
+                    Text("Удалить всё", color = Color(0xFFB74343))
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        showClearHistoryDialog = false
-                    }
-                ) {
-                    Text("Отмена", color = TextMuted)
+                TextButton(onClick = { showClearHistoryDialog = false }) {
+                    Text("Отмена", color = colors.muted)
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun ProfileTab(
+    profileName: String,
+    listCount: Int,
+    totalItems: Int,
+    boughtItems: Int,
+    colors: AppPalette,
+    onEditProfile: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.background)
+            .padding(20.dp)
+    ) {
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "Мой профиль",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = colors.text
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = colors.card,
+            shape = RoundedCornerShape(24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(84.dp)
+                        .background(colors.softCard, RoundedCornerShape(42.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = profileName.firstOrNull()?.uppercase() ?: "?",
+                        fontSize = 34.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.accent
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = profileName,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.text
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "Организую покупки с умом",
+                    fontSize = 14.sp,
+                    color = colors.muted
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Button(
+                    onClick = onEditProfile,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.accent
+                    )
+                ) {
+                    Text("Редактировать профиль")
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                TextButton(onClick = onOpenSettings) {
+                    Text(
+                        text = "⚙ Настройки",
+                        color = colors.accent,
+                        fontSize = 15.sp
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "Моя статистика",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = colors.text
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = colors.card,
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                ProfileStatistic("Активные списки", listCount.toString(), colors)
+                ProfileStatistic("Всего товаров", totalItems.toString(), colors)
+                ProfileStatistic("Куплено товаров", boughtItems.toString(), colors)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Smart Shopping List",
+            modifier = Modifier.fillMaxWidth(),
+            fontSize = 13.sp,
+            color = colors.muted,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun ProfileStatistic(
+    label: String,
+    value: String,
+    colors: AppPalette
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            fontSize = 15.sp,
+            color = colors.muted
+        )
+        Text(
+            text = value,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = colors.accent
+        )
+    }
+}
+
+@Composable
+private fun SettingsTab(
+    darkTheme: Boolean,
+    colors: AppPalette,
+    onDarkThemeChange: (Boolean) -> Unit,
+    onBack: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.background)
+            .padding(20.dp)
+    ) {
+        Spacer(modifier = Modifier.height(24.dp))
+
+        TextButton(onClick = onBack) {
+            Text("← Назад в профиль", color = colors.accent)
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "Настройки",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = colors.text
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = colors.card,
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Тёмная тема",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.text
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = if (darkTheme) {
+                            "Тёмное оформление включено"
+                        } else {
+                            "Светлое оформление включено"
+                        },
+                        fontSize = 14.sp,
+                        color = colors.muted
+                    )
+                }
+
+                Switch(
+                    checked = darkTheme,
+                    onCheckedChange = onDarkThemeChange
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = colors.card,
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "О приложении",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.text
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "Smart Shopping List",
+                    fontSize = 14.sp,
+                    color = colors.muted
+                )
+
+                Text(
+                    text = "Удобное планирование покупок",
+                    fontSize = 14.sp,
+                    color = colors.muted
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Версия 1.0",
+                    fontSize = 13.sp,
+                    color = colors.muted
+                )
+            }
+        }
     }
 }
